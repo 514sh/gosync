@@ -1,0 +1,23 @@
+[project]
+name = "gosync"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "django>=6.0.1",
+    "psycopg>=3.3.2",
+]
+
+[dependency-groups]
+dev = [
+    "mixer>=7.2.2",
+    "poethepoet>=0.40.0",
+    "pytest>=9.0.2",
+    "pytest-cov>=7.0.0",
+    "pytest-django>=4.11.1",
+]
+
+
+[tool.poe.tasks]
+test = "uv run --env-file .env.development pytest"
