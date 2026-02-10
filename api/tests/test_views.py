@@ -1,6 +1,6 @@
 import pytest
 from django.test import TestCase
-from rest_framework.test import APIRequestFactory
+from rest_framework.test import APIClient, APIRequestFactory
 
 from api.views import ObtainRefreshTokenView, ObtainTokenPairView, RegisterUserView
 
@@ -111,4 +111,41 @@ class TestRefreshTokenView:
         assert response.status_code == 401
         assert "detail" in response.data, (
             "Expected 'detail' key in response for invalid credentials"
+        )
+
+
+@pytestmark
+class TestProjectView:
+    def test_project_list_and_post_view(self, owner_user):
+        # Authenticate the client
+        factory = APIRequestFactory()
+        request = factory.post(
+            "/api/token/",
+            {"username": owner_user.username, "password": "ownerpass123"},
+            content_type="application/json",
+        )
+        view = ObtainTokenPairView.as_view()
+        response = view(request)
+        access_token = response.data["access"]
+        client = APIClient()
+        response = client.post(
+            "/api/projects/",
+            data={"name": "Test Project"},
+            content_type="application/json",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+
+        assert response.status_code == 201
+        assert isinstance(response.data, dict), "Expected response data to be a dict"
+        assert "message" in response.data, "Expected 'message' key in response"
+
+        response = client.get(
+            "/api/projects/",
+            content_type="application/json",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        assert isinstance(response.data, list), "Expected response data to be a list"
+        assert len(response.data) == 1, "Expected one project in response"
+        assert response.data[0]["name"] == "Test Project", (
+            "Expected project name to match"
         )

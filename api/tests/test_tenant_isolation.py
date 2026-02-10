@@ -1,7 +1,6 @@
 # tests.py
 import pytest
 from django.db import connection, transaction, utils
-from django.test import TransactionTestCase
 
 from api.models import Project, Tenant
 
@@ -9,7 +8,7 @@ pytestmark = pytest.mark.django_db
 
 
 @pytestmark
-class TenantIsolationTest(TransactionTestCase):
+class TestTenantIsolation:
     def test_rls_is_enabled(self):
         """First, verify RLS is actually enabled"""
         with connection.cursor() as cursor:
@@ -20,8 +19,8 @@ class TenantIsolationTest(TransactionTestCase):
                 WHERE relname = 'api_project'
             """)
             result = cursor.fetchone()
-            self.assertIsNotNone(result, "api_project table not found")
-            self.assertTrue(result[0], "RLS is NOT enabled on api_project table!")
+            assert result is not None
+            assert result[0] is True
             # Check if policy exists
             cursor.execute("""
                 SELECT COUNT(*) 
@@ -30,19 +29,18 @@ class TenantIsolationTest(TransactionTestCase):
                 AND policyname  in('tenant_isolation_select', 'tenant_isolation_insert', 'tenant_isolation_update', 'tenant_isolation_delete')
             """)
             count = cursor.fetchone()[0]
-            self.assertEqual(count, 4, "tenant_isolation policies not found!")
+            assert count == 4
 
-    def test_rls_prevents_cross_tenant_access(self):
-        tenant1 = Tenant.objects.create(name="Tenant 1")
-        tenant2 = Tenant.objects.create(name="Tenant 2")
+    def test_rls_prevents_cross_tenant_access(self, default_user, another_user):
+        tenant1 = Tenant(name="Tenant 1")
+        tenant1.save(owner=default_user)
+        tenant2 = Tenant(name="Tenant 2")
+        tenant2.save(owner=another_user)
 
         # Verify without context returns nothing
         projects_no_ctx = Project.objects.all()
-        print(f"Without context: {projects_no_ctx.count()} projects")
-        self.assertEqual(
-            projects_no_ctx.count(),
-            0,
-            "RLS not working - projects visible without context before transaction!",
+        assert projects_no_ctx.count() == 0, (
+            "RLS not working - projects visible without context before transaction!"
         )
         # Set context to tenant1
         with transaction.atomic():
@@ -51,17 +49,14 @@ class TenantIsolationTest(TransactionTestCase):
                     "SET LOCAL app.current_tenant_id = %s", [str(tenant1.id)]
                 )
             project1 = Project.objects.create(name="Project 1", tenant=tenant1)
-            # Should only see tenant1's projects
+
             projects = Project.objects.all()
-            self.assertEqual(projects.count(), 1)
-            self.assertEqual(projects.first().id, project1.id)
-            with self.assertRaises(utils.ProgrammingError):
+            assert projects.count() == 1
+            assert projects.first().id == project1.id
+            with pytest.raises(utils.ProgrammingError):
                 Project.objects.create(name="Invalid Project", tenant=tenant2)
 
         projects_no_ctx = Project.objects.all()
-        print(f"Without context: {projects_no_ctx.count()} projects")
-        self.assertEqual(
-            projects_no_ctx.count(),
-            0,
-            "RLS not working - projects are visible without context after transaction!",
+        assert projects_no_ctx.count() == 0, (
+            "RLS not working - projects are visible without context after transaction!"
         )
