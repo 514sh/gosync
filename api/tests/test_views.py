@@ -138,6 +138,7 @@ class TestProjectView:
         assert response.status_code == 201
         assert isinstance(response.data, dict), "Expected response data to be a dict"
         assert "message" in response.data, "Expected 'message' key in response"
+        assert response.data["id"] is not None, "Expected project ID to be present"
 
         response = client.get(
             "/api/projects/",
@@ -146,6 +147,92 @@ class TestProjectView:
         )
         assert isinstance(response.data, list), "Expected response data to be a list"
         assert len(response.data) == 1, "Expected one project in response"
+        assert response.data[0]["id"] is not None, "Expected project ID to be present"
         assert response.data[0]["name"] == "Test Project", (
             "Expected project name to match"
         )
+
+
+@pytestmark
+class TestTaskView:
+    def test_task_list_and_post_view(
+        self,
+        owner_user,
+    ):
+        # Authenticate the client
+        factory = APIRequestFactory()
+        request = factory.post(
+            "/api/token/",
+            {"username": owner_user.username, "password": "ownerpass123"},
+            content_type="application/json",
+        )
+        view = ObtainTokenPairView.as_view()
+        response = view(request)
+        access_token = response.data["access"]
+        client = APIClient()
+        project_response = client.post(
+            "/api/projects/",
+            data={"name": "Test Project"},
+            content_type="application/json",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+
+        response = client.post(
+            "/api/tasks/",
+            data={"name": "Test Task", "project_id": project_response.data["id"]},
+            content_type="application/json",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        assert isinstance(response.data, dict), "Expected response data to be a dict"
+        assert "message" in response.data, "Expected 'message' key in response"
+        assert response.data["message"] == "Task created in project Test Project", (
+            "Expected task creation message to match"
+        )
+        assert response.data["id"] is not None, "Expected task ID to be present"
+
+
+@pytestmark
+class TestTaskCommentView:
+    def test_task_comment_list_and_post_view(self, owner_user):
+        # This is a placeholder for future tests related to task comments
+        factory = APIRequestFactory()
+        request = factory.post(
+            "/api/token/",
+            {"username": owner_user.username, "password": "ownerpass123"},
+            content_type="application/json",
+        )
+        view = ObtainTokenPairView.as_view()
+        response = view(request)
+        access_token = response.data["access"]
+        client = APIClient()
+        project_response = client.post(
+            "/api/projects/",
+            data={"name": "Test Project"},
+            content_type="application/json",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+
+        task_response = client.post(
+            "/api/tasks/",
+            data={"name": "Test Task", "project_id": project_response.data["id"]},
+            content_type="application/json",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        response = client.post(
+            f"/api/tasks/{task_response.data['id']}/comments/",
+            data={"content": "This is a test comment."},
+            content_type="application/json",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+
+        assert response.status_code == 201
+        assert isinstance(response.data, dict), "Expected response data to be a dict"
+        assert "author" in response.data, "Expected 'author' key in response"
+        assert response.data["comment"] == "This is a test comment.", (
+            "Expected comment content to match"
+        )
+        assert response.data["id"] is not None, "Expected comment ID to be present"
+        assert response.data["author"] == owner_user.username, (
+            "Expected comment author to match"
+        )
+        # Future implementation will go here
